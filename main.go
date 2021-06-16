@@ -59,7 +59,7 @@ func main() {
 func processDigitalObject(repoId int, doId int) error {
 	do, err := client.GetDigitalObject(repoId, doId)
 	if err != nil {
-		log.Printf("ERROR Failed to get digital object %s\n", do.URI)
+		log.Printf("ERROR Failed to get digital object, skipping %s", do.URI)
 		return nil
 	}
 	log.Printf("INFO Processing %s", do.URI)
@@ -85,11 +85,11 @@ func processDigitalObject(repoId int, doId int) error {
 		}
 
 	} else if IsDOThumbnailOnly(do.FileVersions) == true {
-		log.Printf("INFO Deleting thumbnail-only digital object %s %s\n", do.URI, do.Title)
+		log.Printf("INFO Deleting thumbnail-only digital object %s %s", do.URI, do.Title)
 		if test != true {
 			msg, err := client.DeleteDigitalObject(repoId, doId)
 			if err != nil {
-				log.Printf("ERROR Failed to delete digital object %s\n", do.URI)
+				log.Printf("ERROR Failed to delete digital object %s", do.URI)
 				return nil
 			}
 			log.Printf("INFO %s deleted: %s", do.URI, msg)
