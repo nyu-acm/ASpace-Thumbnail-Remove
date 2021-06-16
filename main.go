@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/nyudlts/go-aspace"
 	"log"
 	"os"
@@ -11,25 +12,32 @@ var (
 	client *aspace.ASClient
   	err error
 	repoId int
+	environment string
 	test bool
 )
 
 func init() {
 	flag.IntVar(&repoId, "repository", 0, "the repository")
+	flag.StringVar(&environment, "environment", "", "the environemnt")
 	flag.BoolVar(&test, "test", false, "test mode")
 }
+
 func main() {
-	f, err := os.OpenFile("thumbnail-removal.log", os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
+	flag.Parse()
+	logfilename := fmt.Sprintf("thumbnail-removal-repository-%d.log", repoId)
+
+	fmt.Println("Running, logging to", logfilename)
+	f, err := os.OpenFile(logfilename, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		log.Fatalf("error creating logfile: %v", err)
 	}
 	defer f.Close()
 
 	log.SetOutput(f)
+	log.Println("INFO", "thumbnail remove tool")
 
-	log.Println("INFO", "do-migration tool")
-	flag.Parse()
-	client, err = aspace.NewClient("/etc/go-aspace.yml", "fade", 20)
+
+	client, err = aspace.NewClient("/etc/go-aspace.yml", environment, 20)
 	if err != nil {
 		log.Println("ERROR", err)
 		log.Fatal("FATAL", "Could not get a client")
@@ -39,6 +47,7 @@ func main() {
 	if err != nil {
 		log.Fatal("FATAL ", "Could not get a list of DO IDs for repository",  repoId)
 	}
+
 	for _, doId := range doIds {
 		err := processDigitalObject(repoId, doId); if err != nil {
 			log.Println("ERROR", err.Error())
@@ -59,10 +68,22 @@ func processDigitalObject(repoId int, doId int) error {
 		log.Printf("INFO %s contains more than one file version", do.URI)
 		thumbs := containsThumbnail(do.FileVersions)
 		if len(thumbs) > 0 {
+			var newFV []aspace.FileVersion
 			for _, i := range thumbs {
-				log.Printf("INFO fv #%d is a thumbnail", i)
+				log.Printf("INFO Removing thumbnail file version #%d", i)
+				newFV = removeFileVersion(do.FileVersions, i)
 			}
+
+			do.FileVersions = newFV
+
+			msg, err := client.UpdateDigitalObject(repoId, doId, do)
+			if err != nil {
+				log.Printf("ERROR Failed to update digital object %s", do.URI)
+				return nil
+			}
+			log.Printf("INFO %s updated: %s", do.URI, msg)
 		}
+
 	} else if IsDOThumbnailOnly(do.FileVersions) == true {
 		log.Printf("INFO Deleting thumbnail-only digital object %s %s\n", do.URI, do.Title)
 		if test != true {
@@ -71,12 +92,11 @@ func processDigitalObject(repoId int, doId int) error {
 				log.Printf("ERROR Failed to delete digital object %s\n", do.URI)
 				return nil
 			}
-			log.Printf("INFO %s deleted: %s\n", do.URI, msg)
+			log.Printf("INFO %s deleted: %s", do.URI, msg)
 		}
 	} else {
-		log.Printf("INFO %s conforms to all rules, skipping\n", do.URI)
+		log.Printf("INFO %s conforms to all rules, skipping", do.URI)
 	}
-
 
 	return nil
 }
